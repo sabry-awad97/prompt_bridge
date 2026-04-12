@@ -1,7 +1,7 @@
 """ChatGPT provider implementation."""
 
 import uuid
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from ...domain.entities import (
     ChatRequest,
@@ -14,6 +14,9 @@ from ...domain.providers import AIProvider
 from ..browser import ScraplingBrowser
 from ..formatting import PromptFormatter
 from ..parsing import ToolCallParser
+
+if TYPE_CHECKING:
+    from ..session_pool import SessionPool
 
 
 class ChatGPTProvider(AIProvider):
@@ -30,8 +33,8 @@ class ChatGPTProvider(AIProvider):
         from ..session_pool import SessionPool
 
         if isinstance(browser_or_pool, SessionPool):
-            self._pool = browser_or_pool
-            self._browser = None
+            self._pool: SessionPool | None = browser_or_pool
+            self._browser: ScraplingBrowser | None = None
         else:
             self._browser = browser_or_pool
             self._pool = None
@@ -56,8 +59,9 @@ class ChatGPTProvider(AIProvider):
         # Acquire session from pool or use single browser
         if self._pool:
             session = await self._pool.acquire()
-            browser = session.browser
+            browser: ScraplingBrowser = session.browser
         else:
+            assert self._browser is not None
             browser = self._browser
             session = None
 
@@ -71,7 +75,7 @@ class ChatGPTProvider(AIProvider):
             # Parse tool calls if present
             tool_calls = None
             finish_reason = "stop"
-            content = response_text
+            content: str | None = response_text
 
             if request.tools:
                 parsed_calls = self._parser.parse(response_text)
@@ -104,7 +108,7 @@ class ChatGPTProvider(AIProvider):
             raise ProviderError(f"ChatGPT execution failed: {e}") from e
         finally:
             # Always release session back to pool
-            if session:
+            if session and self._pool:
                 await self._pool.release(session)
 
     async def health_check(self) -> bool:
@@ -123,6 +127,7 @@ class ChatGPTProvider(AIProvider):
                 finally:
                     await self._pool.release(session)
             else:
+                assert self._browser is not None
                 return await self._browser.check_chatgpt_accessible()
         except Exception:
             return False
