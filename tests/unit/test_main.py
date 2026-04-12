@@ -13,7 +13,7 @@ def test_create_app():
 
 
 def test_health_endpoint():
-    """Test basic health endpoint."""
+    """Test health endpoint with request tracking."""
     app = create_app()
     client = TestClient(app)
 
@@ -23,3 +23,8 @@ def test_health_endpoint():
     data = response.json()
     assert data["status"] == "healthy"
     assert "Prompt Bridge" in data["message"]
+    assert "request_id" in data
+    assert "config_loaded" in data
+
+    # Verify request ID is in response headers
+    assert "X-Request-ID" in response.headers
