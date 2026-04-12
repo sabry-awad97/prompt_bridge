@@ -14,6 +14,7 @@ from ...domain.providers import AIProvider
 from ..browser import ScraplingBrowser
 from ..formatting import PromptFormatter
 from ..parsing import ToolCallParser
+from ..resilience import CircuitBreaker, with_retry
 
 if TYPE_CHECKING:
     from ..session_pool import SessionPool
@@ -42,10 +43,29 @@ class ChatGPTProvider(AIProvider):
         self._models = ["gpt-4o-mini", "gpt-4", "gpt-4-turbo"]
         self._formatter = PromptFormatter()
         self._parser = ToolCallParser()
+        self._circuit_breaker = CircuitBreaker(
+            failure_threshold=5, timeout=60, name="chatgpt"
+        )
 
+    @with_retry(max_attempts=3, backoff_base=2.0)
     async def execute_chat(self, request: ChatRequest) -> ChatResponse:
         """
-        Execute chat completion via ChatGPT.
+        Execute chat completion via ChatGPT with retry and circuit breaker.
+
+        Args:
+            request: Chat completion request
+
+        Returns:
+            Chat completion response
+
+        Raises:
+            ProviderError: If execution fails
+        """
+        return await self._circuit_breaker.call(self._execute_chat_internal, request)
+
+    async def _execute_chat_internal(self, request: ChatRequest) -> ChatResponse:
+        """
+        Internal chat execution without resilience.
 
         Args:
             request: Chat completion request
@@ -141,6 +161,15 @@ class ChatGPTProvider(AIProvider):
             List of model identifiers
         """
         return self._models
+
+    def get_circuit_breaker_status(self) -> dict:
+        """
+        Get circuit breaker status.
+
+        Returns:
+            Circuit breaker status dictionary
+        """
+        return self._circuit_breaker.get_status()
 
     def _calculate_usage(self, prompt: str, response: str) -> Usage:
         """

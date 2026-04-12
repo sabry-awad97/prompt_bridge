@@ -98,6 +98,11 @@ def create_app() -> FastAPI:
         if session_pool:
             response["session_pool"] = session_pool.get_stats()
 
+        # TODO: Add circuit breaker status once provider registry is initialized (Issue #9)
+        # response["circuit_breakers"] = {
+        #     "chatgpt": chatgpt_provider.get_circuit_breaker_status()
+        # }
+
         return response
 
     return app

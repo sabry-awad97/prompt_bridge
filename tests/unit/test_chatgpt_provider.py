@@ -217,3 +217,26 @@ class TestChatGPTProvider:
         assert response.tool_calls is None
         assert response.content == "I don't have access to weather data."
         assert response.finish_reason == "stop"
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_integration(
+        self, provider: ChatGPTProvider, mock_browser: AsyncMock
+    ) -> None:
+        """Test circuit breaker integration with provider."""
+        # Get initial circuit breaker status
+        status = provider.get_circuit_breaker_status()
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 0
+
+        # Successful request should not affect circuit breaker
+        request = ChatRequest(
+            messages=[Message(role=MessageRole.USER, content="Hello")],
+            model="gpt-4o-mini",
+        )
+
+        response = await provider.execute_chat(request)
+        assert response.content == "Hello from ChatGPT!"
+
+        status = provider.get_circuit_breaker_status()
+        assert status["state"] == "closed"
+        assert status["success_count"] == 1
