@@ -2,10 +2,17 @@
 
 import uuid
 
-from ...domain.entities import ChatRequest, ChatResponse, Message, MessageRole, Usage
+from ...domain.entities import (
+    ChatRequest,
+    ChatResponse,
+    ToolCall,
+    Usage,
+)
 from ...domain.exceptions import ProviderError
 from ...domain.providers import AIProvider
 from ..browser import ScraplingBrowser
+from ..formatting import PromptFormatter
+from ..parsing import ToolCallParser
 
 
 class ChatGPTProvider(AIProvider):
@@ -20,6 +27,8 @@ class ChatGPTProvider(AIProvider):
         """
         self._browser = browser
         self._models = ["gpt-4o-mini", "gpt-4", "gpt-4-turbo"]
+        self._formatter = PromptFormatter()
+        self._parser = ToolCallParser()
 
     async def execute_chat(self, request: ChatRequest) -> ChatResponse:
         """
@@ -35,11 +44,31 @@ class ChatGPTProvider(AIProvider):
             ProviderError: If execution fails
         """
         try:
-            # Format prompt from messages
-            prompt = self._format_prompt(request.messages)
+            # Format prompt from messages and tools
+            prompt = self._formatter.format(request.messages, request.tools)
 
             # Execute via browser
             response_text = await self._browser.execute_chatgpt(prompt)
+
+            # Parse tool calls if present
+            tool_calls = None
+            finish_reason = "stop"
+            content = response_text
+
+            if request.tools:
+                parsed_calls = self._parser.parse(response_text)
+                if parsed_calls:
+                    # Convert to ToolCall entities
+                    tool_calls = [
+                        ToolCall(
+                            id=tc["id"],
+                            name=tc["function"]["name"],
+                            arguments=tc["function"]["arguments"],
+                        )
+                        for tc in parsed_calls
+                    ]
+                    finish_reason = "tool_calls"
+                    content = None  # No content when tool calls present
 
             # Calculate usage
             usage = self._calculate_usage(prompt, response_text)
@@ -47,11 +76,11 @@ class ChatGPTProvider(AIProvider):
             # Build response
             return ChatResponse(
                 id=f"chatcmpl-{uuid.uuid4().hex[:29]}",
-                content=response_text,
-                tool_calls=None,
+                content=content,
+                tool_calls=tool_calls,
                 model=request.model,
                 usage=usage,
-                finish_reason="stop",
+                finish_reason=finish_reason,
             )
         except Exception as e:
             raise ProviderError(f"ChatGPT execution failed: {e}") from e
@@ -77,45 +106,6 @@ class ChatGPTProvider(AIProvider):
             List of model identifiers
         """
         return self._models
-
-    def _format_prompt(self, messages: list[Message]) -> str:
-        """
-        Format messages into a prompt string.
-
-        Args:
-            messages: List of messages
-
-        Returns:
-            Formatted prompt
-        """
-        parts = []
-        system_parts = []
-
-        for msg in messages:
-            if msg.role == MessageRole.SYSTEM:
-                if msg.content:
-                    system_parts.append(msg.content)
-            elif msg.role == MessageRole.USER:
-                if msg.content:
-                    parts.append(msg.content)
-            elif msg.role == MessageRole.ASSISTANT:
-                if msg.content:
-                    parts.append(f"[Assistant]: {msg.content}")
-
-        # Build final prompt
-        final_prompt = ""
-
-        # Add system messages
-        if system_parts:
-            final_prompt += "=== SYSTEM INSTRUCTIONS ===\n"
-            final_prompt += "\n\n".join(system_parts)
-            final_prompt += "\n=== END OF INSTRUCTIONS ===\n\n"
-
-        # Add conversation
-        if parts:
-            final_prompt += "\n".join(parts)
-
-        return final_prompt
 
     def _calculate_usage(self, prompt: str, response: str) -> Usage:
         """

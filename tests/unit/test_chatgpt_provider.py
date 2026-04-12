@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from prompt_bridge.domain.entities import ChatRequest, Message, MessageRole
+from prompt_bridge.domain.entities import ChatRequest, Message, MessageRole, Tool
 from prompt_bridge.domain.exceptions import ProviderError
 from prompt_bridge.infrastructure.providers.chatgpt import ChatGPTProvider
 
@@ -147,3 +147,73 @@ class TestChatGPTProvider:
         assert usage.prompt_tokens == 3
         assert usage.completion_tokens == 3
         assert usage.total_tokens == 6
+
+    @pytest.mark.asyncio
+    async def test_execute_chat_with_tools(
+        self, provider: ChatGPTProvider, mock_browser: AsyncMock
+    ) -> None:
+        """Test chat execution with tool calling."""
+        # Mock browser to return tool call JSON
+        mock_browser.execute_chatgpt.return_value = """
+        {
+            "tool_calls": [{
+                "name": "get_weather",
+                "arguments": {"location": "Paris"}
+            }]
+        }
+        """
+
+        request = ChatRequest(
+            messages=[
+                Message(role=MessageRole.USER, content="What's the weather in Paris?")
+            ],
+            tools=[
+                Tool(
+                    name="get_weather",
+                    description="Get weather",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                    },
+                )
+            ],
+            model="gpt-4o-mini",
+        )
+
+        response = await provider.execute_chat(request)
+
+        assert response.tool_calls is not None
+        assert len(response.tool_calls) == 1
+        assert response.tool_calls[0].name == "get_weather"
+        assert response.finish_reason == "tool_calls"
+        assert response.content is None
+
+    @pytest.mark.asyncio
+    async def test_execute_chat_with_tools_no_call(
+        self, provider: ChatGPTProvider, mock_browser: AsyncMock
+    ) -> None:
+        """Test chat execution with tools but no tool call in response."""
+        mock_browser.execute_chatgpt.return_value = (
+            "I don't have access to weather data."
+        )
+
+        request = ChatRequest(
+            messages=[Message(role=MessageRole.USER, content="What's the weather?")],
+            tools=[
+                Tool(
+                    name="get_weather",
+                    description="Get weather",
+                    parameters={
+                        "type": "object",
+                        "properties": {"location": {"type": "string"}},
+                    },
+                )
+            ],
+            model="gpt-4o-mini",
+        )
+
+        response = await provider.execute_chat(request)
+
+        assert response.tool_calls is None
+        assert response.content == "I don't have access to weather data."
+        assert response.finish_reason == "stop"
