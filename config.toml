@@ -1,0 +1,33 @@
+# Prompt Bridge Configuration - Default Settings
+
+[server]
+host = "0.0.0.0"
+port = 7777
+workers = 1
+
+[browser]
+headless = true
+timeout = 120
+solve_cloudflare = true
+real_chrome = true
+
+[session_pool]
+pool_size = 3
+max_session_age = 3600 # 1 hour in seconds
+acquire_timeout = 30
+
+[resilience]
+max_retry_attempts = 3
+retry_backoff_base = 2.0
+circuit_breaker_failure_threshold = 5
+circuit_breaker_timeout = 60
+
+[observability]
+log_level = "INFO"
+structured_logging = true
+metrics_enabled = true
+tracing_enabled = false
+
+[providers]
+chatgpt_enabled = true
+qwen_enabled = false

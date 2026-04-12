@@ -1,0 +1,19 @@
+# Production Environment Overrides
+
+[server]
+workers = 4
+
+[browser]
+headless = true
+
+[session_pool]
+pool_size = 5 # Larger pool for production
+
+[resilience]
+circuit_breaker_failure_threshold = 3 # More sensitive in production
+
+[observability]
+log_level = "INFO"
+structured_logging = true
+metrics_enabled = true
+tracing_enabled = true

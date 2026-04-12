@@ -1,0 +1,17 @@
+# Development Environment Overrides
+
+[server]
+port = 7777
+
+[browser]
+headless = false # Show browser in development
+
+[session_pool]
+pool_size = 1 # Smaller pool for development
+
+[observability]
+log_level = "DEBUG"
+tracing_enabled = true
+
+[providers]
+qwen_enabled = true # Enable all providers in development
