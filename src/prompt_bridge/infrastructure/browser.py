@@ -174,3 +174,12 @@ class ScraplingBrowser:
             )
         except Exception:
             return False
+
+    async def health_check(self) -> bool:
+        """
+        Check if browser is healthy and responsive.
+
+        Returns:
+            True if healthy, False otherwise
+        """
+        return await self.check_chatgpt_accessible()

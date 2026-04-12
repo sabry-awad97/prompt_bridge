@@ -10,17 +10,19 @@ from fastapi import FastAPI, Request
 
 from prompt_bridge.infrastructure.config import load_config
 from prompt_bridge.infrastructure.observability import configure_logging
+from prompt_bridge.infrastructure.session_pool import SessionPool
 from prompt_bridge.presentation.middleware import RequestIDMiddleware
 
-# Global settings instance
+# Global settings and session pool instances
 settings = None
+session_pool = None
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global settings
+    global settings, session_pool
 
     # Startup
     logger.info("application_startup", message="Initializing application...")
@@ -42,8 +44,13 @@ async def lifespan(app: FastAPI):
         json_format=settings.observability.structured_logging,
     )
 
-    # TODO: Initialize dependencies (remaining issues)
-    # - Session pool (Issue #6)
+    # Initialize session pool (Issue #6)
+    logger.info("initializing_session_pool")
+    session_pool = SessionPool(settings.session_pool, settings.browser)
+    await session_pool.initialize()
+    logger.info("session_pool_initialized", stats=session_pool.get_stats())
+
+    # TODO: Initialize remaining dependencies
     # - Provider registry (Issue #9)
     # - Use cases
 
@@ -53,7 +60,11 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("application_shutdown", message="Shutting down application...")
-    # TODO: Graceful shutdown (Issue #12)
+
+    # Gracefully shutdown session pool
+    if session_pool:
+        await session_pool.shutdown()
+
     logger.info("application_stopped", message="Application shutdown complete")
 
 
@@ -72,16 +83,22 @@ def create_app() -> FastAPI:
     # Health check endpoint
     @app.get("/health")
     async def health_check(request: Request):
-        """Health check endpoint with request tracking."""
+        """Health check endpoint with request tracking and pool status."""
         request_id = request.state.request_id
         logger.info("health_check", request_id=request_id)
 
-        return {
+        response = {
             "status": "healthy",
             "message": "Prompt Bridge is running!",
             "request_id": request_id,
             "config_loaded": settings is not None,
         }
+
+        # Add session pool stats if available
+        if session_pool:
+            response["session_pool"] = session_pool.get_stats()
+
+        return response
 
     return app
 
