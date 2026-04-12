@@ -1,6 +1,7 @@
 """Prompt formatting for AI providers."""
 
 import json
+from typing import Any, cast
 
 from ..domain.entities import Message, MessageRole, Tool
 
@@ -84,15 +85,21 @@ class PromptFormatter:
             instruction += f"Description: {tool.description}\n"
 
             properties = tool.parameters.get("properties", {})
-            if properties:
+            if properties and isinstance(properties, dict):
                 instruction += "Parameters:\n"
                 required = tool.parameters.get("required", [])
 
                 for param_name, param_info in properties.items():
-                    param_type = param_info.get("type", "string")
-                    param_desc = param_info.get("description", "")
-                    is_required = "required" if param_name in required else "optional"
-                    instruction += f"  - {param_name} ({param_type}, {is_required}): {param_desc}\n"
+                    if isinstance(param_info, dict):
+                        param_dict = cast(dict[str, Any], param_info)
+                        param_type = str(param_dict.get("type", "string"))
+                        param_desc = str(param_dict.get("description", ""))
+                        is_required = (
+                            "required"
+                            if isinstance(required, list) and param_name in required
+                            else "optional"
+                        )
+                        instruction += f"  - {param_name} ({param_type}, {is_required}): {param_desc}\n"
 
             instruction += "\n"
 

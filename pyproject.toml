@@ -38,7 +38,7 @@ dev = [
     "pytest-benchmark>=5.2.3",
 
     # Code Quality
-    "mypy>=1.20.0",
+    "ty>=0.0.29",
     "ruff>=0.15.10",
     "black>=26.3.1",
 
@@ -72,12 +72,13 @@ ignore = [
 target-version = ['py311']
 line-length = 88
 
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
+[tool.ty]
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.rules]
+# Enable strict type checking
+all = "error"
 
 [tool.pytest.ini_options]
 minversion = "7.0"

@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from enum import Enum
 from functools import wraps
-from typing import Any, TypeVar
+from typing import TypedDict, TypeVar
 
 import structlog
 
@@ -18,6 +18,16 @@ from ..domain.exceptions import (
 logger = structlog.get_logger()
 
 T = TypeVar("T")
+
+
+class CircuitBreakerStatus(TypedDict):
+    """Circuit breaker status information."""
+
+    name: str
+    state: str
+    failure_count: int
+    success_count: int
+    last_failure: str | None
 
 
 def with_retry(
@@ -39,7 +49,7 @@ def with_retry(
 
     def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> T:
+        async def wrapper(*args: object, **kwargs: object) -> T:
             last_exception = None
 
             for attempt in range(1, max_attempts + 1):
@@ -50,7 +60,7 @@ def with_retry(
                         logger.info(
                             "retry_succeeded",
                             attempt=attempt,
-                            function=func.__name__,
+                            function=getattr(func, "__name__", str(func)),
                         )
 
                     return result
@@ -119,8 +129,8 @@ class CircuitBreaker:
         self.success_count = 0
 
     async def call(
-        self, func: Callable[..., Awaitable[Any]], *args: Any, **kwargs: Any
-    ) -> Any:
+        self, func: Callable[..., Awaitable[T]], *args: object, **kwargs: object
+    ) -> T:
         """
         Execute function with circuit breaker protection.
 
@@ -187,7 +197,7 @@ class CircuitBreaker:
             )
             self.state = CircuitState.OPEN
 
-    def get_status(self) -> dict[str, Any]:
+    def get_status(self) -> CircuitBreakerStatus:
         """
         Get circuit breaker status.
 

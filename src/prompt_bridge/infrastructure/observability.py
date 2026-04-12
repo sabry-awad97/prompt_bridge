@@ -2,11 +2,17 @@
 
 import logging
 import sys
+from collections.abc import MutableMapping
+from typing import Any
 
 import structlog
 
 
-def mask_secrets(logger, method_name, event_dict):
+def mask_secrets(
+    logger: structlog.BoundLogger,
+    method_name: str,
+    event_dict: MutableMapping[str, object],
+) -> MutableMapping[str, object]:
     """Mask sensitive fields in log output."""
     sensitive_keys = {"api_key", "password", "token", "secret", "authorization"}
 
@@ -32,7 +38,7 @@ def configure_logging(log_level: str = "INFO", json_format: bool = True) -> None
     )
 
     # Configure structlog processors
-    processors = [
+    processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,

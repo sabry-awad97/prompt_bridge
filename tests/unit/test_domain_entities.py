@@ -78,7 +78,7 @@ class TestMessage:
         assert message.role == MessageRole.ASSISTANT
         assert message.content is None
         assert message.tool_calls == tool_calls
-        assert len(message.tool_calls) == 1
+        assert message.tool_calls is not None and len(message.tool_calls) == 1
 
     def test_create_tool_message(self):
         """Test creating a tool message."""
@@ -115,7 +115,10 @@ class TestTool:
         )
         assert tool.name == "get_weather"
         assert tool.description == "Get current weather"
-        assert "location" in tool.parameters["properties"]
+        properties = tool.parameters.get("properties")
+        assert properties is not None
+        assert isinstance(properties, dict)
+        assert "location" in properties
 
     def test_tool_immutable(self):
         """Test that Tool is immutable."""
@@ -156,7 +159,7 @@ class TestChatRequest:
         )
         assert len(request.messages) == 1
         assert request.model == "gpt-4"
-        assert len(request.tools) == 1
+        assert request.tools is not None and len(request.tools) == 1
         assert request.temperature == 0.7
         assert request.max_tokens == 1000
 
@@ -222,7 +225,7 @@ class TestChatResponse:
         )
         assert response.id == "resp_456"
         assert response.content is None
-        assert len(response.tool_calls) == 1
+        assert response.tool_calls is not None and len(response.tool_calls) == 1
         assert response.finish_reason == "tool_calls"
 
     def test_chat_response_immutable(self):

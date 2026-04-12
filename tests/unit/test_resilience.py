@@ -1,7 +1,6 @@
 """Unit tests for resilience module (retry and circuit breaker)."""
 
 import asyncio
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -169,8 +168,8 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio
     async def test_circuit_breaker_half_open_after_timeout(self) -> None:
         """Test circuit breaker transitions to HALF_OPEN after timeout."""
-        from unittest.mock import patch
         from datetime import datetime, timedelta
+        from unittest.mock import patch
 
         cb = CircuitBreaker(failure_threshold=2, timeout=1, name="test")  # 1 second timeout
 

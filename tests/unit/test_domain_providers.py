@@ -47,7 +47,7 @@ class TestAIProviderInterface:
     def test_cannot_instantiate_abstract_provider(self):
         """Test that AIProvider cannot be instantiated directly."""
         with pytest.raises(TypeError):
-            AIProvider()  # type: ignore
+            AIProvider()
 
     @pytest.mark.asyncio
     async def test_mock_provider_execute_chat(self):

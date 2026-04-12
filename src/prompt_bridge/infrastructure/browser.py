@@ -1,13 +1,16 @@
 """Browser automation implementation using Scrapling."""
 
 import asyncio
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
+from playwright.async_api import Page
 from scrapling.fetchers import AsyncStealthySession
 
 from ..domain.config import BrowserConfig
 from ..domain.exceptions import BrowserError
+
+T = TypeVar("T")
 
 
 class ScraplingBrowser:
@@ -53,8 +56,11 @@ class ScraplingBrowser:
             raise BrowserError(f"Failed to shutdown browser: {e}") from e
 
     async def execute_automation(
-        self, url: str, automation_func: Callable, **kwargs: Any
-    ) -> Any:
+        self,
+        url: str,
+        automation_func: Callable[..., Awaitable[T]],
+        **kwargs: object,
+    ) -> T:
         """
         Execute a generic automation function on a URL.
 
@@ -73,12 +79,13 @@ class ScraplingBrowser:
             raise BrowserError("Browser not initialized")
 
         try:
-            result: dict[str, Any] = {"data": None}
+            result: T | None = None
 
-            async def wrapper(page: Any) -> None:
+            async def wrapper(page: Page) -> None:
                 """Wrapper to capture automation result."""
+                nonlocal result
                 try:
-                    result["data"] = await automation_func(page, **kwargs)
+                    result = await automation_func(page, **kwargs)
                 except Exception as e:
                     raise BrowserError(f"Automation function failed: {e}") from e
 
@@ -89,7 +96,9 @@ class ScraplingBrowser:
                 load_dom=True,
             )
 
-            return result["data"]
+            if result is None:
+                raise BrowserError("Automation function returned no result")
+            return result
 
         except BrowserError:
             raise
@@ -110,7 +119,7 @@ class ScraplingBrowser:
             BrowserError: If execution fails
         """
 
-        async def chatgpt_automation(page: Any, prompt_text: str) -> str:
+        async def chatgpt_automation(page: Page, prompt_text: str) -> str:
             """ChatGPT-specific automation."""
             try:
                 # Wait for prompt textarea
@@ -160,7 +169,7 @@ class ScraplingBrowser:
             True if accessible, False otherwise
         """
 
-        async def check_accessibility(page: Any) -> bool:
+        async def check_accessibility(page: Page) -> bool:
             """Check if ChatGPT page loads."""
             try:
                 await page.wait_for_selector("#prompt-textarea", timeout=30000)

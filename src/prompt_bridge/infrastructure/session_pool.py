@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TypedDict
 
 import structlog
 
@@ -11,6 +11,25 @@ from ..domain.exceptions import BrowserError
 from .browser import ScraplingBrowser
 
 logger = structlog.get_logger()
+
+
+class SessionInfo(TypedDict):
+    """Session information dictionary."""
+
+    id: str
+    age_seconds: float
+    requests: int
+    healthy: bool
+
+
+class PoolStats(TypedDict):
+    """Pool statistics dictionary."""
+
+    pool_size: int
+    active: int
+    available: int
+    total_requests: int
+    sessions: list[SessionInfo]
 
 
 class BrowserSession:
@@ -257,7 +276,7 @@ class SessionPool:
                 )
                 session.is_healthy = False
 
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self) -> PoolStats:
         """
         Get pool statistics.
 

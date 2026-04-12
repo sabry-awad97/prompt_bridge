@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 
 class MessageRole(StrEnum):
@@ -40,7 +39,7 @@ class Tool:
 
     name: str
     description: str
-    parameters: dict[str, Any]
+    parameters: dict[str, object]  # JSON Schema parameters
 
 
 @dataclass(frozen=True)

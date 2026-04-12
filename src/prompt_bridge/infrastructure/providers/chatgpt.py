@@ -14,7 +14,7 @@ from ...domain.providers import AIProvider
 from ..browser import ScraplingBrowser
 from ..formatting import PromptFormatter
 from ..parsing import ToolCallParser
-from ..resilience import CircuitBreaker, with_retry
+from ..resilience import CircuitBreaker, CircuitBreakerStatus, with_retry
 
 if TYPE_CHECKING:
     from ..session_pool import SessionPool
@@ -162,7 +162,7 @@ class ChatGPTProvider(AIProvider):
         """
         return self._models
 
-    def get_circuit_breaker_status(self) -> dict:
+    def get_circuit_breaker_status(self) -> CircuitBreakerStatus:
         """
         Get circuit breaker status.
 
