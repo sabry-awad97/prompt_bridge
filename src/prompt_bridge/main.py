@@ -31,6 +31,7 @@ provider_registry = None
 chat_completion_use_case = None
 api_routes = None
 health_routes = None
+debug_routes = None
 logger = structlog.get_logger()
 
 
@@ -101,6 +102,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize route handlers (Issue #10)
     logger.info("initializing_route_handlers")
+    global api_routes, health_routes, debug_routes
     api_routes = APIRoutes(
         chat_completion_use_case=chat_completion_use_case,
         provider_registry=provider_registry,
@@ -110,6 +112,10 @@ async def lifespan(app: FastAPI):
         session_pool=session_pool,
         chat_use_case=chat_completion_use_case,
     )
+    
+    # Initialize debug routes (for streaming development)
+    from .presentation.debug_routes import DebugRoutes
+    debug_routes = DebugRoutes(session_pool=session_pool)
 
     logger.info("application_ready", message="Application initialized successfully")
 
@@ -169,6 +175,8 @@ def register_routes(app: FastAPI) -> None:
         app.include_router(api_routes.router, tags=["API"])
     if health_routes:
         app.include_router(health_routes.router, tags=["Health"])
+    if debug_routes:
+        app.include_router(debug_routes.router, tags=["Debug"])
 
 
 # Create app instance
