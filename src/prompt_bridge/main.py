@@ -80,9 +80,8 @@ async def lifespan(app: FastAPI):
     provider_registry = ProviderRegistry()
     provider_registry.register(chatgpt_provider, "chatgpt")
 
-    # Initialize Qwen provider if enabled
     # Initialize Qwen provider if enabled (uses same session pool as ChatGPT)
-    qwen_enabled = getattr(settings, "qwen_enabled", False)
+    qwen_enabled = settings.providers.qwen_enabled
     if qwen_enabled:
         logger.info("initializing_qwen_provider")
         qwen_provider = QwenProvider(session_pool)

@@ -1,17 +1,32 @@
 # Development Environment Overrides
 
 [server]
+host = "0.0.0.0"
 port = 7777
 
 [browser]
-headless = false # Show browser in development
+headless = true         # Run browser in headless mode (no visible window)
+timeout = 120
+solve_cloudflare = true
+real_chrome = true
 
 [session_pool]
-pool_size = 1 # Smaller pool for development
+pool_size = 1          # Smaller pool for development
+max_session_age = 3600
+acquire_timeout = 30
+
+[resilience]
+max_retry_attempts = 3
+retry_backoff_base = 2.0
+circuit_breaker_failure_threshold = 5
+circuit_breaker_timeout = 60
 
 [observability]
 log_level = "DEBUG"
 tracing_enabled = true
+structured_logging = true
+metrics_enabled = true
 
 [providers]
-qwen_enabled = true # Enable all providers in development
+chatgpt_enabled = true
+qwen_enabled = true    # Enable all providers in development
