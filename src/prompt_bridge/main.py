@@ -7,6 +7,7 @@ from pathlib import Path
 import structlog
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from prompt_bridge.application import ChatCompletionUseCase, ProviderRegistry
 from prompt_bridge.infrastructure.config import load_config
@@ -15,20 +16,29 @@ from prompt_bridge.infrastructure.providers.chatgpt import ChatGPTProvider
 from prompt_bridge.infrastructure.providers.qwen import QwenProvider
 from prompt_bridge.infrastructure.qwen_automation import QwenAutomation
 from prompt_bridge.infrastructure.session_pool import SessionPool
-from prompt_bridge.presentation.middleware import RequestIDMiddleware
+from prompt_bridge.presentation.middleware import (
+    RequestIDMiddleware,
+    LoggingMiddleware,
+    MetricsMiddleware,
+    ErrorHandlingMiddleware,
+)
+from prompt_bridge.presentation.routes import APIRoutes
+from prompt_bridge.presentation.health import HealthRoutes
 
 # Global dependency container
 settings = None
 session_pool = None
 provider_registry = None
 chat_completion_use_case = None
+api_routes = None
+health_routes = None
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global settings, session_pool, provider_registry, chat_completion_use_case
+    global settings, session_pool, provider_registry, chat_completion_use_case, api_routes, health_routes
 
     # Startup
     logger.info("application_startup", message="Initializing application...")
@@ -82,7 +92,19 @@ async def lifespan(app: FastAPI):
     logger.info("initializing_chat_completion_use_case")
     chat_completion_use_case = ChatCompletionUseCase(
         provider_registry=provider_registry,
-        authenticator=None,  # TODO: Add authenticator in Issue #10
+        authenticator=None,  # TODO: Add authenticator in future issue
+    )
+
+    # Initialize route handlers (Issue #10)
+    logger.info("initializing_route_handlers")
+    api_routes = APIRoutes(
+        chat_completion_use_case=chat_completion_use_case,
+        provider_registry=provider_registry,
+    )
+    health_routes = HealthRoutes(
+        provider_registry=provider_registry,
+        session_pool=session_pool,
+        chat_use_case=chat_completion_use_case,
     )
 
     logger.info("application_ready", message="Application initialized successfully")
@@ -108,45 +130,50 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add middleware
+    # Add middleware in correct order (Issue #10)
+    # 1. CORS (if needed for browser access)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure appropriately for production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # 2. Error handling (catches all exceptions)
+    app.add_middleware(ErrorHandlingMiddleware)
+    
+    # 3. Metrics collection (measures everything)
+    app.add_middleware(MetricsMiddleware)
+    
+    # 4. Logging (logs with request ID)
+    app.add_middleware(LoggingMiddleware)
+    
+    # 5. Request ID (first - sets context)
     app.add_middleware(RequestIDMiddleware)
-
-    # Health check endpoint
-    @app.get("/health")
-    async def health_check(request: Request):
-        """Health check endpoint with request tracking and pool status."""
-        request_id = request.state.request_id
-        logger.info("health_check", request_id=request_id)
-
-        response = {
-            "status": "healthy",
-            "message": "Prompt Bridge is running!",
-            "request_id": request_id,
-            "config_loaded": settings is not None,
-        }
-
-        # Add session pool stats if available
-        if session_pool:
-            response["session_pool"] = session_pool.get_stats()
-
-        # Add provider registry info if available (Issue #9)
-        if provider_registry:
-            response["providers"] = provider_registry.list_providers()
-            response["provider_health"] = await provider_registry.health_check_all()
-
-        # Add circuit breaker status if use case available (Issue #9)
-        if chat_completion_use_case:
-            response["circuit_breakers"] = (
-                chat_completion_use_case.get_circuit_breaker_status()
-            )
-
-        return response
 
     return app
 
 
+def register_routes(app: FastAPI) -> None:
+    """Register routes after dependencies are initialized."""
+    if api_routes:
+        app.include_router(api_routes.router, tags=["API"])
+    if health_routes:
+        app.include_router(health_routes.router, tags=["Health"])
+
+
 # Create app instance
 app = create_app()
+
+# Register routes after app creation
+@app.on_event("startup")
+async def startup_register_routes():
+    """Register routes after startup."""
+    # Wait a bit for lifespan to complete
+    import asyncio
+    await asyncio.sleep(0.1)
+    register_routes(app)
 
 
 def main():
