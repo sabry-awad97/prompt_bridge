@@ -1,26 +1,23 @@
 """Test enhanced middleware functionality."""
 
-import json
-import time
 import uuid
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-import pytest
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
 
 from prompt_bridge.domain.exceptions import (
     AuthenticationError,
-    ValidationError,
-    ProviderError,
     CircuitBreakerOpenError,
+    ProviderError,
+    ValidationError,
 )
 from prompt_bridge.presentation.middleware import (
-    RequestIDMiddleware,
+    ErrorHandlingMiddleware,
     LoggingMiddleware,
     MetricsMiddleware,
-    ErrorHandlingMiddleware,
+    RequestIDMiddleware,
 )
 
 
@@ -94,7 +91,7 @@ def test_request_id_available_in_request_state():
     assert captured_request_id == custom_id
 
 
-@patch('prompt_bridge.presentation.middleware.logger')
+@patch("prompt_bridge.presentation.middleware.logger")
 def test_logging_middleware_logs_requests(mock_logger):
     """Test that logging middleware logs request and response."""
     # Arrange: Create app with middleware
@@ -305,10 +302,7 @@ def test_middleware_stack_integration():
 
     @app.get("/test")
     async def test_endpoint(request: Request):
-        return {
-            "message": "test",
-            "request_id": request.state.request_id
-        }
+        return {"message": "test", "request_id": request.state.request_id}
 
     client = TestClient(app)
 
@@ -318,7 +312,7 @@ def test_middleware_stack_integration():
     # Assert: All middleware functionality works
     assert response.status_code == 200
     assert "X-Request-ID" in response.headers
-    
+
     data = response.json()
     assert data["message"] == "test"
     assert data["request_id"] == response.headers["X-Request-ID"]

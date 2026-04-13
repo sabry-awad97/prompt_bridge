@@ -162,7 +162,9 @@ class TestCircuitBreaker:
         assert cb.state == CircuitState.OPEN
 
         # Next call should fail fast with CircuitBreakerOpenError
-        with pytest.raises(CircuitBreakerOpenError, match="Circuit breaker 'test' is OPEN"):
+        with pytest.raises(
+            CircuitBreakerOpenError, match="Circuit breaker 'test' is OPEN"
+        ):
             await cb.call(failing_function)
 
     @pytest.mark.asyncio
@@ -171,7 +173,9 @@ class TestCircuitBreaker:
         from datetime import datetime, timedelta
         from unittest.mock import patch
 
-        cb = CircuitBreaker(failure_threshold=2, timeout=1, name="test")  # 1 second timeout
+        cb = CircuitBreaker(
+            failure_threshold=2, timeout=1, name="test"
+        )  # 1 second timeout
 
         async def failing_function():
             raise BrowserError("Failed")

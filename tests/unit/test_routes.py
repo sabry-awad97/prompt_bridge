@@ -1,6 +1,5 @@
 """Test enhanced API routes."""
 
-import time
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -9,8 +8,7 @@ from fastapi.testclient import TestClient
 
 from prompt_bridge.application.chat_completion import ChatCompletionUseCase
 from prompt_bridge.application.provider_registry import ProviderRegistry
-from prompt_bridge.domain.entities import ChatResponse, Usage, Message, MessageRole
-from prompt_bridge.domain.exceptions import ValidationError, ProviderError
+from prompt_bridge.domain.entities import ChatResponse, Usage
 from prompt_bridge.domain.providers import AIProvider
 from prompt_bridge.presentation.routes import APIRoutes
 
@@ -54,16 +52,16 @@ def api_routes(chat_use_case, provider_registry):
 def app_with_routes(api_routes):
     """Create FastAPI app with routes and middleware."""
     from prompt_bridge.presentation.middleware import (
-        RequestIDMiddleware,
         ErrorHandlingMiddleware,
+        RequestIDMiddleware,
     )
-    
+
     app = FastAPI()
-    
+
     # Add middleware (in reverse order due to FastAPI middleware stack)
     app.add_middleware(ErrorHandlingMiddleware)
     app.add_middleware(RequestIDMiddleware)
-    
+
     app.include_router(api_routes.router)
     return app
 
@@ -93,29 +91,27 @@ async def test_chat_completions_success(client, mock_provider):
         "/v1/chat/completions",
         json={
             "model": "test-model",
-            "messages": [
-                {"role": "user", "content": "Hello"}
-            ],
+            "messages": [{"role": "user", "content": "Hello"}],
             "temperature": 0.7,
             "max_tokens": 100,
-        }
+        },
     )
 
     # Assert: Successful response
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["id"] == "test-response-123"
     assert data["model"] == "test-model"
     assert data["object"] == "chat.completion"
     assert len(data["choices"]) == 1
-    
+
     choice = data["choices"][0]
     assert choice["index"] == 0
     assert choice["message"]["role"] == "assistant"
     assert choice["message"]["content"] == "Hello! How can I help you?"
     assert choice["finish_reason"] == "stop"
-    
+
     usage = data["usage"]
     assert usage["prompt_tokens"] == 10
     assert usage["completion_tokens"] == 15
@@ -144,9 +140,9 @@ async def test_chat_completions_with_authorization(client, mock_provider):
         "/v1/chat/completions",
         json={
             "model": "test-model",
-            "messages": [{"role": "user", "content": "Hello"}]
+            "messages": [{"role": "user", "content": "Hello"}],
         },
-        headers={"Authorization": "Bearer test-token-123"}
+        headers={"Authorization": "Bearer test-token-123"},
     )
 
     # Assert: Successful response
@@ -162,8 +158,8 @@ async def test_chat_completions_validation_error(client, chat_use_case):
         "/v1/chat/completions",
         json={
             "model": "test-model",
-            "messages": []  # Empty messages should cause validation error
-        }
+            "messages": [],  # Empty messages should cause validation error
+        },
     )
 
     # Assert: Validation error response (handled by middleware)
@@ -181,8 +177,8 @@ async def test_chat_completions_unsupported_model(client):
         "/v1/chat/completions",
         json={
             "model": "unsupported-model",
-            "messages": [{"role": "user", "content": "Hello"}]
-        }
+            "messages": [{"role": "user", "content": "Hello"}],
+        },
     )
 
     # Assert: Provider error (handled by middleware)
@@ -201,17 +197,17 @@ async def test_list_models_success(client, provider_registry):
     # Assert: Successful response
     assert response.status_code == 200
     data = response.json()
-    
+
     assert data["object"] == "list"
     assert "data" in data
     assert len(data["data"]) >= 2  # Should have at least test-model and gpt-4o-mini
-    
+
     # Check model structure
     model = data["data"][0]
     assert "id" in model
     assert model["object"] == "model"
     assert model["owned_by"] == "test-provider"
-    
+
     # Check that our test models are present
     model_ids = [m["id"] for m in data["data"]]
     assert "test-model" in model_ids
@@ -223,24 +219,24 @@ async def test_list_models_multiple_providers(client):
     """Test models list with multiple providers."""
     # Arrange: Add another provider
     provider_registry = ProviderRegistry()
-    
+
     # First provider
     provider1 = Mock(spec=AIProvider)
     provider1.supported_models = ["model-1a", "model-1b"]
     provider_registry.register(provider1, "provider-1")
-    
+
     # Second provider
     provider2 = Mock(spec=AIProvider)
     provider2.supported_models = ["model-2a", "model-2b"]
     provider_registry.register(provider2, "provider-2")
-    
+
     # Create routes with multiple providers
     chat_use_case = ChatCompletionUseCase(provider_registry=provider_registry)
     routes = APIRoutes(
         chat_completion_use_case=chat_use_case,
         provider_registry=provider_registry,
     )
-    
+
     app = FastAPI()
     app.include_router(routes.router)
     client = TestClient(app)
@@ -251,13 +247,13 @@ async def test_list_models_multiple_providers(client):
     # Assert: All models from all providers
     assert response.status_code == 200
     data = response.json()
-    
+
     model_ids = [m["id"] for m in data["data"]]
     assert "model-1a" in model_ids
     assert "model-1b" in model_ids
     assert "model-2a" in model_ids
     assert "model-2b" in model_ids
-    
+
     # Check ownership
     models_by_owner = {}
     for model in data["data"]:
@@ -265,7 +261,7 @@ async def test_list_models_multiple_providers(client):
         if owner not in models_by_owner:
             models_by_owner[owner] = []
         models_by_owner[owner].append(model["id"])
-    
+
     assert "provider-1" in models_by_owner
     assert "provider-2" in models_by_owner
     assert set(models_by_owner["provider-1"]) == {"model-1a", "model-1b"}
@@ -277,7 +273,7 @@ async def test_chat_completions_with_tools(client, mock_provider):
     """Test chat completion with tools."""
     # Arrange: Mock provider response with tool calls
     from prompt_bridge.domain.entities import ToolCall
-    
+
     mock_response = ChatResponse(
         id="test-response-tools",
         content=None,
@@ -285,7 +281,7 @@ async def test_chat_completions_with_tools(client, mock_provider):
             ToolCall(
                 id="call_123",
                 name="get_weather",
-                arguments='{"location": "San Francisco"}'
+                arguments='{"location": "San Francisco"}',
             )
         ],
         model="test-model",
@@ -308,25 +304,23 @@ async def test_chat_completions_with_tools(client, mock_provider):
                         "description": "Get weather information",
                         "parameters": {
                             "type": "object",
-                            "properties": {
-                                "location": {"type": "string"}
-                            }
-                        }
-                    }
+                            "properties": {"location": {"type": "string"}},
+                        },
+                    },
                 }
-            ]
-        }
+            ],
+        },
     )
 
     # Assert: Successful response with tool calls
     assert response.status_code == 200
     data = response.json()
-    
+
     choice = data["choices"][0]
     assert choice["message"]["content"] is None
     assert choice["message"]["tool_calls"] is not None
     assert len(choice["message"]["tool_calls"]) == 1
-    
+
     tool_call = choice["message"]["tool_calls"][0]
     assert tool_call["id"] == "call_123"
     assert tool_call["type"] == "function"
@@ -354,9 +348,9 @@ async def test_request_id_propagation(client, mock_provider):
         "/v1/chat/completions",
         json={
             "model": "test-model",
-            "messages": [{"role": "user", "content": "Hello"}]
+            "messages": [{"role": "user", "content": "Hello"}],
         },
-        headers={"X-Request-ID": custom_request_id}
+        headers={"X-Request-ID": custom_request_id},
     )
 
     # Assert: Request ID is in response headers

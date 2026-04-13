@@ -2,6 +2,7 @@
 
 import asyncio
 
+from playwright.async_api import Page
 from scrapling.fetchers import AsyncStealthySession
 
 from ..domain.exceptions import BrowserError
@@ -39,9 +40,14 @@ class QwenAutomation:
         Raises:
             BrowserError: If automation fails
         """
-        try:
-            # Navigate to Qwen AI
-            page = await self._session.get("https://qianwen.aliyun.com/chat")
+        if self._session is None:
+            raise BrowserError("Session not initialized. Call initialize() first.")
+
+        result: str | None = None
+
+        async def qwen_chat_action(page: Page) -> None:
+            """Execute Qwen chat interaction."""
+            nonlocal result
 
             # Wait for the textarea with the specific class
             await page.wait_for_selector(".message-input-textarea", timeout=60000)
@@ -72,7 +78,9 @@ class QwenAutomation:
                     last_message = messages[-1]
 
                     # Try to get text from the markdown content
-                    markdown_element = await last_message.query_selector(".qwen-markdown-text")
+                    markdown_element = await last_message.query_selector(
+                        ".qwen-markdown-text"
+                    )
 
                     if markdown_element:
                         current_text = await markdown_element.inner_text()
@@ -88,7 +96,19 @@ class QwenAutomation:
 
                 await asyncio.sleep(0.5)
 
-            return last_text.strip()
+            result = last_text.strip()
+
+        try:
+            # Use fetch with page_action callback
+            await self._session.fetch(
+                "https://qianwen.aliyun.com/chat",
+                page_action=qwen_chat_action,
+                load_dom=True,
+            )
+
+            if result is None:
+                raise BrowserError("Qwen automation returned no result")
+            return result
 
         except Exception as e:
             raise BrowserError(f"Qwen AI automation failed: {e}") from e
@@ -100,9 +120,19 @@ class QwenAutomation:
         Returns:
             True if accessible, False otherwise
         """
-        try:
-            page = await self._session.get("https://qianwen.aliyun.com/chat")
+        if self._session is None:
+            return False
+
+        async def check_action(page: Page) -> None:
+            """Check if Qwen page is accessible."""
             await page.wait_for_selector(".message-input-textarea", timeout=10000)
+
+        try:
+            await self._session.fetch(
+                "https://qianwen.aliyun.com/chat",
+                page_action=check_action,
+                load_dom=True,
+            )
             return True
         except Exception:
             return False

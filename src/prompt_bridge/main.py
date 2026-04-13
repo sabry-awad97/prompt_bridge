@@ -6,7 +6,7 @@ from pathlib import Path
 
 import structlog
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from prompt_bridge.application import ChatCompletionUseCase, ProviderRegistry
@@ -16,14 +16,14 @@ from prompt_bridge.infrastructure.providers.chatgpt import ChatGPTProvider
 from prompt_bridge.infrastructure.providers.qwen import QwenProvider
 from prompt_bridge.infrastructure.qwen_automation import QwenAutomation
 from prompt_bridge.infrastructure.session_pool import SessionPool
+from prompt_bridge.presentation.health import HealthRoutes
 from prompt_bridge.presentation.middleware import (
-    RequestIDMiddleware,
+    ErrorHandlingMiddleware,
     LoggingMiddleware,
     MetricsMiddleware,
-    ErrorHandlingMiddleware,
+    RequestIDMiddleware,
 )
 from prompt_bridge.presentation.routes import APIRoutes
-from prompt_bridge.presentation.health import HealthRoutes
 
 # Global dependency container
 settings = None
@@ -38,7 +38,13 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global settings, session_pool, provider_registry, chat_completion_use_case, api_routes, health_routes
+    global \
+        settings, \
+        session_pool, \
+        provider_registry, \
+        chat_completion_use_case, \
+        api_routes, \
+        health_routes
 
     # Startup
     logger.info("application_startup", message="Initializing application...")
@@ -109,6 +115,10 @@ async def lifespan(app: FastAPI):
 
     logger.info("application_ready", message="Application initialized successfully")
 
+    # Register routes after initialization
+    register_routes(app)
+    logger.info("routes_registered", message="Routes registered successfully")
+
     yield
 
     # Shutdown
@@ -139,16 +149,16 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # 2. Error handling (catches all exceptions)
     app.add_middleware(ErrorHandlingMiddleware)
-    
+
     # 3. Metrics collection (measures everything)
     app.add_middleware(MetricsMiddleware)
-    
+
     # 4. Logging (logs with request ID)
     app.add_middleware(LoggingMiddleware)
-    
+
     # 5. Request ID (first - sets context)
     app.add_middleware(RequestIDMiddleware)
 
@@ -165,15 +175,6 @@ def register_routes(app: FastAPI) -> None:
 
 # Create app instance
 app = create_app()
-
-# Register routes after app creation
-@app.on_event("startup")
-async def startup_register_routes():
-    """Register routes after startup."""
-    # Wait a bit for lifespan to complete
-    import asyncio
-    await asyncio.sleep(0.1)
-    register_routes(app)
 
 
 def main():

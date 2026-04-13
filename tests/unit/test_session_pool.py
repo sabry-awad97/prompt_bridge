@@ -57,9 +57,7 @@ class TestSessionPool:
     @pytest.fixture
     def pool_config(self) -> SessionPoolConfig:
         """Create pool config."""
-        return SessionPoolConfig(
-            pool_size=2, max_session_age=3600, acquire_timeout=5
-        )
+        return SessionPoolConfig(pool_size=2, max_session_age=3600, acquire_timeout=5)
 
     @pytest.fixture
     def mock_browser(self) -> AsyncMock:

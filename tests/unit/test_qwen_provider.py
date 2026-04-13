@@ -23,6 +23,7 @@ class TestQwenProvider:
     def provider(self, mock_qwen_automation: AsyncMock):
         """Create Qwen provider."""
         from prompt_bridge.infrastructure.providers.qwen import QwenProvider
+
         return QwenProvider(mock_qwen_automation)
 
     def test_supported_models(self, provider) -> None:
@@ -58,7 +59,7 @@ class TestQwenProvider:
         request = ChatRequest(
             messages=[Message(role=MessageRole.USER, content="Test")],
             tools=[Tool(name="test", description="test", parameters={})],
-            model="qwen-max"
+            model="qwen-max",
         )
 
         with pytest.raises(ProviderError, match="doesn't support function calling"):
@@ -111,7 +112,9 @@ class TestQwenProvider:
         self, provider, mock_qwen_automation: AsyncMock
     ) -> None:
         """Test chat execution with automation error."""
-        mock_qwen_automation.execute_qwen_chat.side_effect = Exception("Automation timeout")
+        mock_qwen_automation.execute_qwen_chat.side_effect = Exception(
+            "Automation timeout"
+        )
 
         request = ChatRequest(
             messages=[Message(role=MessageRole.USER, content="Hello")],
@@ -147,7 +150,9 @@ class TestQwenProvider:
         self, provider, mock_qwen_automation: AsyncMock
     ) -> None:
         """Test health check with exception."""
-        mock_qwen_automation.check_qwen_accessible.side_effect = Exception("Network error")
+        mock_qwen_automation.check_qwen_accessible.side_effect = Exception(
+            "Network error"
+        )
 
         result = await provider.health_check()
 

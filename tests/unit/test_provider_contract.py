@@ -1,7 +1,8 @@
 """Contract tests for AIProvider interface compliance."""
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from prompt_bridge.domain.entities import ChatRequest, Message, MessageRole
 from prompt_bridge.domain.providers import AIProvider
@@ -35,6 +36,7 @@ class TestProviderContract:
         elif request.param == "qwen":
             # This will fail until we implement QwenProvider
             from prompt_bridge.infrastructure.providers.qwen import QwenProvider
+
             return QwenProvider(mock_qwen_automation)
         else:
             raise ValueError(f"Unknown provider: {request.param}")
@@ -42,10 +44,10 @@ class TestProviderContract:
     def test_provider_implements_interface(self, provider: AIProvider) -> None:
         """Test provider implements AIProvider interface."""
         # Test interface methods exist
-        assert hasattr(provider, 'execute_chat')
-        assert hasattr(provider, 'health_check')
-        assert hasattr(provider, 'supported_models')
-        
+        assert hasattr(provider, "execute_chat")
+        assert hasattr(provider, "health_check")
+        assert hasattr(provider, "supported_models")
+
         # Test methods are callable
         assert callable(provider.execute_chat)
         assert callable(provider.health_check)
@@ -68,19 +70,19 @@ class TestProviderContract:
         """Test execute_chat returns ChatResponse."""
         request = ChatRequest(
             messages=[Message(role=MessageRole.USER, content="Test")],
-            model=provider.supported_models[0]
+            model=provider.supported_models[0],
         )
-        
+
         response = await provider.execute_chat(request)
-        
+
         # Test response structure
-        assert hasattr(response, 'id')
-        assert hasattr(response, 'content')
-        assert hasattr(response, 'tool_calls')
-        assert hasattr(response, 'model')
-        assert hasattr(response, 'usage')
-        assert hasattr(response, 'finish_reason')
-        
+        assert hasattr(response, "id")
+        assert hasattr(response, "content")
+        assert hasattr(response, "tool_calls")
+        assert hasattr(response, "model")
+        assert hasattr(response, "usage")
+        assert hasattr(response, "finish_reason")
+
         # Test response values
         assert isinstance(response.id, str)
         assert response.model == request.model

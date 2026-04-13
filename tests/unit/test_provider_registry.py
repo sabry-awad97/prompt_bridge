@@ -65,9 +65,7 @@ class TestProviderRegistry:
         assert registry.get_by_model("gpt-4o-mini") is mock_chatgpt_provider
         assert registry.get_by_model("qwen-max") is mock_qwen_provider
 
-    def test_duplicate_model_registration(
-        self, registry: ProviderRegistry
-    ) -> None:
+    def test_duplicate_model_registration(self, registry: ProviderRegistry) -> None:
         """Test duplicate model registration fails."""
         provider1 = Mock(spec=AIProvider)
         provider1.supported_models = ["shared-model"]

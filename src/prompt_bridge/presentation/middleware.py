@@ -22,21 +22,16 @@ logger = structlog.get_logger()
 
 # Prometheus metrics
 REQUEST_COUNT = Counter(
-    'http_requests_total',
-    'Total HTTP requests',
-    ['method', 'endpoint', 'status_code']
+    "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status_code"]
 )
 
 REQUEST_DURATION = Histogram(
-    'http_request_duration_seconds',
-    'HTTP request duration in seconds',
-    ['method', 'endpoint']
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "endpoint"],
 )
 
-ACTIVE_REQUESTS = Gauge(
-    'http_requests_active',
-    'Number of active HTTP requests'
-)
+ACTIVE_REQUESTS = Gauge("http_requests_active", "Number of active HTTP requests")
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -145,13 +140,12 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             REQUEST_COUNT.labels(
                 method=request.method,
                 endpoint=endpoint,
-                status_code=response.status_code
+                status_code=response.status_code,
             ).inc()
 
-            REQUEST_DURATION.labels(
-                method=request.method,
-                endpoint=endpoint
-            ).observe(duration)
+            REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(
+                duration
+            )
 
             return response
 
@@ -185,9 +179,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 status_code=401,
                 content=ErrorResponseDTO(
                     error=ErrorDTO(
-                        message=str(e),
-                        type="authentication_error",
-                        code="UNAUTHORIZED"
+                        message=str(e), type="authentication_error", code="UNAUTHORIZED"
                     )
                 ).model_dump(),
             )
@@ -198,9 +190,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 status_code=400,
                 content=ErrorResponseDTO(
                     error=ErrorDTO(
-                        message=str(e),
-                        type="validation_error",
-                        code="BAD_REQUEST"
+                        message=str(e), type="validation_error", code="BAD_REQUEST"
                     )
                 ).model_dump(),
             )
@@ -213,7 +203,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                     error=ErrorDTO(
                         message=f"Provider error: {e}",
                         type="provider_error",
-                        code="BAD_GATEWAY"
+                        code="BAD_GATEWAY",
                     )
                 ).model_dump(),
             )
@@ -226,7 +216,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                     error=ErrorDTO(
                         message=f"Service unavailable: {e}",
                         type="circuit_breaker_error",
-                        code="SERVICE_UNAVAILABLE"
+                        code="SERVICE_UNAVAILABLE",
                     )
                 ).model_dump(),
             )
@@ -239,7 +229,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                     error=ErrorDTO(
                         message="Internal server error",
                         type="server_error",
-                        code="INTERNAL_SERVER_ERROR"
+                        code="INTERNAL_SERVER_ERROR",
                     )
                 ).model_dump(),
             )

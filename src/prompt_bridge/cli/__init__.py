@@ -3,6 +3,12 @@
 import typer
 from rich.console import Console
 
+# Import and register individual commands
+from .commands.health import health as health_command
+from .commands.logs import logs as logs_command
+from .commands.start import start as start_command
+from .commands.status import status as status_command
+
 app = typer.Typer(
     name="prompt-bridge",
     help="Prompt Bridge - Professional AI proxy platform with browser automation",
@@ -11,12 +17,11 @@ app = typer.Typer(
 
 console = Console()
 
-# TODO: Register commands (Issue #11)
-# from .commands import status, health, logs, start
-# app.add_typer(status.app, name="status")
-# app.add_typer(health.app, name="health")
-# app.add_typer(logs.app, name="logs")
-# app.add_typer(start.app, name="start")
+# Register commands directly
+app.command()(status_command)
+app.command()(health_command)
+app.command()(start_command)
+app.command()(logs_command)
 
 
 @app.command()
@@ -29,35 +34,11 @@ def version():
     )
 
 
-@app.command()
-def start(
-    host: str = typer.Option("0.0.0.0", help="Host to bind to"),
-    port: int = typer.Option(7777, help="Port to bind to"),
-    reload: bool = typer.Option(False, "--reload", help="Enable hot reload"),
-):
-    """Start the Prompt Bridge server."""
-    console.print(
-        f"[bold green]🚀 Starting Prompt Bridge server on {host}:{port}[/bold green]"
-    )
-
-    if reload:
-        console.print(
-            "[dim]Hot reload enabled - server will restart on code changes[/dim]"
-        )
-
-    # Import here to avoid circular imports
-    import uvicorn
-
-    uvicorn.run(
-        "prompt_bridge.main:app",
-        host=host,
-        port=port,
-        reload=reload,
-    )
-
-
 @app.callback()
 def main(
+    config_file: str | None = typer.Option(
+        None, "--config", "-c", help="Configuration file path"
+    ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
     ),
@@ -65,6 +46,9 @@ def main(
     """Prompt Bridge CLI."""
     if verbose:
         console.print("[dim]Verbose mode enabled[/dim]")
+
+    if config_file:
+        console.print(f"[dim]Using config file: {config_file}[/dim]")
 
 
 # Entry point for the CLI

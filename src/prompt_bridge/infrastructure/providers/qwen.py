@@ -61,7 +61,7 @@ class QwenProvider(AIProvider):
                 tool_calls=None,
                 model=request.model,
                 usage=usage,
-                finish_reason="stop"
+                finish_reason="stop",
             )
         except Exception as e:
             raise ProviderError(f"Qwen execution failed: {e}") from e

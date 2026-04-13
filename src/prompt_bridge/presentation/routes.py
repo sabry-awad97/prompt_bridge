@@ -7,7 +7,7 @@ from fastapi import APIRouter, Header, Request
 
 from ..application.chat_completion import ChatCompletionUseCase
 from ..application.provider_registry import ProviderRegistry
-from ..domain.entities import ChatRequest, Message, Tool
+from ..domain.entities import ChatRequest, Message, MessageRole, Tool
 from .dtos import (
     ChatCompletionRequestDTO,
     ChatCompletionResponseDTO,
@@ -91,13 +91,15 @@ class APIRoutes:
         # Convert DTO to domain entity
         messages = [
             Message(
-                role=msg.role,
+                role=MessageRole(msg.role),
                 content=msg.content,
                 name=msg.name,
                 tool_calls=[
                     # Convert tool calls if present
                     # This would need proper ToolCall entity conversion
-                ] if msg.tool_calls else None,
+                ]
+                if msg.tool_calls
+                else None,
                 tool_call_id=msg.tool_call_id,
             )
             for msg in request_dto.messages
@@ -123,9 +125,7 @@ class APIRoutes:
         )
 
         # Execute via registry (no hardcoded provider)
-        response = await self._chat_use_case.execute(
-            chat_request, auth_token=token
-        )
+        response = await self._chat_use_case.execute(chat_request, auth_token=token)
 
         logger.info(
             "chat_completion_response",
