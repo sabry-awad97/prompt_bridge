@@ -14,7 +14,6 @@ from prompt_bridge.infrastructure.config import load_config
 from prompt_bridge.infrastructure.observability import configure_logging
 from prompt_bridge.infrastructure.providers.chatgpt import ChatGPTProvider
 from prompt_bridge.infrastructure.providers.qwen import QwenProvider
-from prompt_bridge.infrastructure.qwen_automation import QwenAutomation
 from prompt_bridge.infrastructure.session_pool import SessionPool
 from prompt_bridge.presentation.health import HealthRoutes
 from prompt_bridge.presentation.middleware import (
@@ -82,11 +81,11 @@ async def lifespan(app: FastAPI):
     provider_registry.register(chatgpt_provider, "chatgpt")
 
     # Initialize Qwen provider if enabled
+    # Initialize Qwen provider if enabled (uses same session pool as ChatGPT)
     qwen_enabled = getattr(settings, "qwen_enabled", False)
     if qwen_enabled:
         logger.info("initializing_qwen_provider")
-        qwen_automation = QwenAutomation(session_pool)
-        qwen_provider = QwenProvider(qwen_automation)
+        qwen_provider = QwenProvider(session_pool)
         provider_registry.register(qwen_provider, "qwen")
 
     logger.info(

@@ -105,7 +105,7 @@ class TestChatGPTProvider:
             model="gpt-4o-mini",
         )
 
-        with pytest.raises(ProviderError, match="ChatGPT execution failed"):
+        with pytest.raises(ProviderError, match="ChatGPTProvider execution failed"):
             await provider.execute_chat(request)
 
     @pytest.mark.asyncio

@@ -2,103 +2,40 @@
 
 import uuid
 
-from ...domain.entities import (
-    ChatRequest,
-    ChatResponse,
-    Message,
-    MessageRole,
-)
+from ...domain.entities import ChatRequest, Message, MessageRole
 from ...domain.exceptions import ProviderError
-from ...domain.providers import AIProvider
-from ..qwen_automation import QwenAutomation
-from .utils import calculate_usage
+from ..browser import ScraplingBrowser
+from .base import BaseBrowserProvider
 
 
-class QwenProvider(AIProvider):
+class QwenProvider(BaseBrowserProvider):
     """Qwen AI provider using Scrapling automation."""
 
-    def __init__(self, qwen_automation: QwenAutomation):
+    def __init__(self, browser_or_pool):
         """
         Initialize Qwen provider.
 
         Args:
-            qwen_automation: Qwen automation instance
+            browser_or_pool: Scrapling browser instance or SessionPool
         """
-        self._automation = qwen_automation
-        self._models = ["qwen-max", "qwen-plus", "qwen-turbo"]
+        super().__init__(
+            browser_or_pool=browser_or_pool,
+            models=["qwen-max", "qwen-plus", "qwen-turbo"],
+            provider_name="qwen",
+        )
 
-    async def execute_chat(self, request: ChatRequest) -> ChatResponse:
-        """
-        Execute chat completion via Qwen AI.
+    async def _execute_browser_automation(
+        self, browser: ScraplingBrowser, prompt: str
+    ) -> str:
+        """Execute Qwen browser automation."""
+        return await browser.execute_qwen(prompt)
 
-        Args:
-            request: Chat completion request
-
-        Returns:
-            Chat completion response
-
-        Raises:
-            ProviderError: If execution fails
-        """
-        try:
-            # Qwen doesn't support tools
-            if request.tools:
-                raise ProviderError("Qwen provider doesn't support function calling")
-
-            # Format prompt from messages
-            prompt = self._format_prompt(request.messages)
-
-            # Execute via Qwen automation
-            response_text = await self._automation.execute_qwen_chat(prompt)
-
-            # Calculate usage
-            usage = calculate_usage(prompt, response_text)
-
-            # Build response
-            return ChatResponse(
-                id=f"qwen-{uuid.uuid4().hex[:29]}",
-                content=response_text,
-                tool_calls=None,
-                model=request.model,
-                usage=usage,
-                finish_reason="stop",
-            )
-        except Exception as e:
-            raise ProviderError(f"Qwen execution failed: {e}") from e
-
-    async def health_check(self) -> bool:
-        """
-        Check if Qwen AI is accessible.
-
-        Returns:
-            True if healthy, False otherwise
-        """
-        try:
-            return await self._automation.check_qwen_accessible()
-        except Exception:
-            return False
-
-    @property
-    def supported_models(self) -> list[str]:
-        """
-        List of model IDs this provider supports.
-
-        Returns:
-            List of model identifiers
-        """
-        return self._models
+    async def _check_accessibility(self, browser: ScraplingBrowser) -> bool:
+        """Check if Qwen AI is accessible."""
+        return await browser.check_qwen_accessible()
 
     def _format_prompt(self, messages: list[Message]) -> str:
-        """
-        Format messages for Qwen (simpler than ChatGPT).
-
-        Args:
-            messages: List of messages to format
-
-        Returns:
-            Formatted prompt string
-        """
-        # Qwen uses simpler prompt format
+        """Format messages for Qwen (simpler than ChatGPT)."""
         prompt_parts = []
         for msg in messages:
             if msg.role == MessageRole.SYSTEM:
@@ -109,3 +46,17 @@ class QwenProvider(AIProvider):
                 prompt_parts.append(f"Assistant: {msg.content}")
 
         return "\n\n".join(prompt_parts)
+
+    async def _parse_response(
+        self, response_text: str, request: ChatRequest
+    ) -> tuple[str | None, list | None, str]:
+        """Parse Qwen response (no tool calling support)."""
+        # Qwen doesn't support tools
+        if request.tools:
+            raise ProviderError("Qwen provider doesn't support function calling")
+
+        return response_text, None, "stop"
+
+    def _generate_response_id(self) -> str:
+        """Generate Qwen-style response ID."""
+        return f"qwen-{uuid.uuid4().hex[:29]}"

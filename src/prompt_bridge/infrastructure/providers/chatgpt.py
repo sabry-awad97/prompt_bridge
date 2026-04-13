@@ -1,191 +1,72 @@
 """ChatGPT provider implementation."""
 
 import uuid
-from typing import TYPE_CHECKING, Union
 
-from ...domain.entities import (
-    ChatRequest,
-    ChatResponse,
-    ToolCall,
-    Usage,
-)
-from ...domain.exceptions import ProviderError
-from ...domain.providers import AIProvider
+from ...domain.entities import ChatRequest, Message, ToolCall
 from ..browser import ScraplingBrowser
 from ..formatting import PromptFormatter
 from ..parsing import ToolCallParser
-from ..resilience import CircuitBreaker, CircuitBreakerStatus, with_retry
-
-if TYPE_CHECKING:
-    from ..session_pool import SessionPool
+from .base import BaseBrowserProvider
 
 
-class ChatGPTProvider(AIProvider):
+class ChatGPTProvider(BaseBrowserProvider):
     """ChatGPT provider using Scrapling automation."""
 
-    def __init__(self, browser_or_pool: Union[ScraplingBrowser, "SessionPool"]):
+    def __init__(self, browser_or_pool):
         """
         Initialize ChatGPT provider.
 
         Args:
             browser_or_pool: Scrapling browser instance or SessionPool
         """
-        # Support both single browser (legacy) and session pool
-        from ..session_pool import SessionPool
-
-        if isinstance(browser_or_pool, SessionPool):
-            self._pool: SessionPool | None = browser_or_pool
-            self._browser: ScraplingBrowser | None = None
-        else:
-            self._browser = browser_or_pool
-            self._pool = None
-
-        self._models = ["gpt-4o-mini", "gpt-4", "gpt-4-turbo"]
+        super().__init__(
+            browser_or_pool=browser_or_pool,
+            models=["gpt-4o-mini", "gpt-4", "gpt-4-turbo"],
+            provider_name="chatgpt",
+        )
         self._formatter = PromptFormatter()
         self._parser = ToolCallParser()
-        self._circuit_breaker = CircuitBreaker(
-            failure_threshold=5, timeout=60, name="chatgpt"
-        )
 
-    @with_retry(max_attempts=3, backoff_base=2.0)
-    async def execute_chat(self, request: ChatRequest) -> ChatResponse:
-        """
-        Execute chat completion via ChatGPT with retry and circuit breaker.
+    async def _execute_browser_automation(
+        self, browser: ScraplingBrowser, prompt: str
+    ) -> str:
+        """Execute ChatGPT browser automation."""
+        return await browser.execute_chatgpt(prompt)
 
-        Args:
-            request: Chat completion request
+    async def _check_accessibility(self, browser: ScraplingBrowser) -> bool:
+        """Check if ChatGPT is accessible."""
+        return await browser.check_chatgpt_accessible()
 
-        Returns:
-            Chat completion response
+    def _format_prompt(self, messages: list[Message]) -> str:
+        """Format messages using PromptFormatter."""
+        # Note: tools are handled in _parse_response
+        return self._formatter.format(messages, tools=None)
 
-        Raises:
-            ProviderError: If execution fails
-        """
-        return await self._circuit_breaker.call(self._execute_chat_internal, request)
+    async def _parse_response(
+        self, response_text: str, request: ChatRequest
+    ) -> tuple[str | None, list | None, str]:
+        """Parse ChatGPT response and extract tool calls if present."""
+        tool_calls = None
+        finish_reason = "stop"
+        content: str | None = response_text
 
-    async def _execute_chat_internal(self, request: ChatRequest) -> ChatResponse:
-        """
-        Internal chat execution without resilience.
+        if request.tools:
+            parsed_calls = self._parser.parse(response_text)
+            if parsed_calls:
+                # Convert to ToolCall entities
+                tool_calls = [
+                    ToolCall(
+                        id=tc["id"],
+                        name=tc["function"]["name"],
+                        arguments=tc["function"]["arguments"],
+                    )
+                    for tc in parsed_calls
+                ]
+                finish_reason = "tool_calls"
+                content = None  # No content when tool calls present
 
-        Args:
-            request: Chat completion request
+        return content, tool_calls, finish_reason
 
-        Returns:
-            Chat completion response
-
-        Raises:
-            ProviderError: If execution fails
-        """
-        # Acquire session from pool or use single browser
-        if self._pool:
-            session = await self._pool.acquire()
-            browser: ScraplingBrowser = session.browser
-        else:
-            assert self._browser is not None
-            browser = self._browser
-            session = None
-
-        try:
-            # Format prompt from messages and tools
-            prompt = self._formatter.format(request.messages, request.tools)
-
-            # Execute via browser
-            response_text = await browser.execute_chatgpt(prompt)
-
-            # Parse tool calls if present
-            tool_calls = None
-            finish_reason = "stop"
-            content: str | None = response_text
-
-            if request.tools:
-                parsed_calls = self._parser.parse(response_text)
-                if parsed_calls:
-                    # Convert to ToolCall entities
-                    tool_calls = [
-                        ToolCall(
-                            id=tc["id"],
-                            name=tc["function"]["name"],
-                            arguments=tc["function"]["arguments"],
-                        )
-                        for tc in parsed_calls
-                    ]
-                    finish_reason = "tool_calls"
-                    content = None  # No content when tool calls present
-
-            # Calculate usage
-            usage = self._calculate_usage(prompt, response_text)
-
-            # Build response
-            return ChatResponse(
-                id=f"chatcmpl-{uuid.uuid4().hex[:29]}",
-                content=content,
-                tool_calls=tool_calls,
-                model=request.model,
-                usage=usage,
-                finish_reason=finish_reason,
-            )
-        except Exception as e:
-            raise ProviderError(f"ChatGPT execution failed: {e}") from e
-        finally:
-            # Always release session back to pool
-            if session and self._pool:
-                await self._pool.release(session)
-
-    async def health_check(self) -> bool:
-        """
-        Check if ChatGPT is accessible.
-
-        Returns:
-            True if healthy, False otherwise
-        """
-        try:
-            # Use pool or single browser
-            if self._pool:
-                session = await self._pool.acquire()
-                try:
-                    return await session.browser.check_chatgpt_accessible()
-                finally:
-                    await self._pool.release(session)
-            else:
-                assert self._browser is not None
-                return await self._browser.check_chatgpt_accessible()
-        except Exception:
-            return False
-
-    @property
-    def supported_models(self) -> list[str]:
-        """
-        List of model IDs this provider supports.
-
-        Returns:
-            List of model identifiers
-        """
-        return self._models
-
-    def get_circuit_breaker_status(self) -> CircuitBreakerStatus:
-        """
-        Get circuit breaker status.
-
-        Returns:
-            Circuit breaker status dictionary
-        """
-        return self._circuit_breaker.get_status()
-
-    def _calculate_usage(self, prompt: str, response: str) -> Usage:
-        """
-        Calculate token usage (simple word-based estimation).
-
-        Args:
-            prompt: Input prompt
-            response: Output response
-
-        Returns:
-            Usage statistics
-        """
-        prompt_tokens = len(prompt.split())
-        completion_tokens = len(response.split())
-        return Usage(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-        )
+    def _generate_response_id(self) -> str:
+        """Generate ChatGPT-style response ID."""
+        return f"chatcmpl-{uuid.uuid4().hex[:29]}"

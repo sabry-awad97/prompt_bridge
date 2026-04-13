@@ -1,6 +1,5 @@
 """Browser automation implementation using Scrapling."""
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
@@ -118,47 +117,35 @@ class ScraplingBrowser:
         Raises:
             BrowserError: If execution fails
         """
-
-        async def chatgpt_automation(page: Page, prompt_text: str) -> str:
-            """ChatGPT-specific automation."""
-            try:
-                # Wait for prompt textarea
-                await page.wait_for_selector("#prompt-textarea", timeout=60000)
-
-                # Fill and submit prompt
-                await page.fill("#prompt-textarea", prompt_text)
-                await asyncio.sleep(0.5)
-                await page.press("#prompt-textarea", "Enter")
-
-                # Wait for assistant response
-                await page.wait_for_selector(
-                    '[data-message-author-role="assistant"]',
-                    timeout=self._timeout,
-                )
-
-                # Poll for stable response
-                last_text = ""
-                unchanged_count = 0
-
-                while unchanged_count < 4:
-                    messages = await page.query_selector_all(
-                        '[data-message-author-role="assistant"]'
-                    )
-                    if messages:
-                        current_text = await messages[-1].inner_text()
-                        if current_text == last_text and current_text.strip():
-                            unchanged_count += 1
-                        else:
-                            last_text = current_text
-                            unchanged_count = 0
-                    await asyncio.sleep(0.5)
-
-                return last_text.strip()
-            except Exception as e:
-                raise BrowserError(f"ChatGPT automation failed: {e}") from e
+        from .chatgpt_automation import chatgpt_chat_automation
 
         return await self.execute_automation(
-            "https://chatgpt.com/", chatgpt_automation, prompt_text=prompt
+            "https://chatgpt.com/",
+            chatgpt_chat_automation,
+            prompt_text=prompt,
+            timeout=self._timeout,
+        )
+
+    async def execute_qwen(self, prompt: str) -> str:
+        """
+        Execute a prompt on Qwen AI using Scrapling's stealth capabilities.
+
+        Args:
+            prompt: The formatted prompt to send
+
+        Returns:
+            The response text from Qwen AI
+
+        Raises:
+            BrowserError: If execution fails
+        """
+        from .qwen_automation import qwen_chat_automation
+
+        return await self.execute_automation(
+            "https://chat.qwen.ai/",
+            qwen_chat_automation,
+            prompt_text=prompt,
+            timeout=self._timeout,
         )
 
     async def check_chatgpt_accessible(self) -> bool:
@@ -168,18 +155,27 @@ class ScraplingBrowser:
         Returns:
             True if accessible, False otherwise
         """
-
-        async def check_accessibility(page: Page) -> bool:
-            """Check if ChatGPT page loads."""
-            try:
-                await page.wait_for_selector("#prompt-textarea", timeout=30000)
-                return True
-            except Exception:
-                return False
+        from .chatgpt_automation import check_chatgpt_accessibility
 
         try:
             return await self.execute_automation(
-                "https://chatgpt.com/", check_accessibility
+                "https://chatgpt.com/", check_chatgpt_accessibility
+            )
+        except Exception:
+            return False
+
+    async def check_qwen_accessible(self) -> bool:
+        """
+        Check if Qwen AI is accessible.
+
+        Returns:
+            True if accessible, False otherwise
+        """
+        from .qwen_automation import check_qwen_accessibility
+
+        try:
+            return await self.execute_automation(
+                "https://chat.qwen.ai/", check_qwen_accessibility
             )
         except Exception:
             return False

@@ -18,26 +18,19 @@ class TestProviderContract:
         browser = AsyncMock()
         browser.execute_chatgpt = AsyncMock(return_value="Test response")
         browser.check_chatgpt_accessible = AsyncMock(return_value=True)
+        browser.execute_qwen = AsyncMock(return_value="Test response")
+        browser.check_qwen_accessible = AsyncMock(return_value=True)
         return browser
 
-    @pytest.fixture
-    def mock_qwen_automation(self) -> AsyncMock:
-        """Create mock Qwen automation for testing."""
-        automation = AsyncMock()
-        automation.execute_qwen_chat = AsyncMock(return_value="Test response")
-        automation.check_qwen_accessible = AsyncMock(return_value=True)
-        return automation
-
     @pytest.fixture(params=["chatgpt", "qwen"])
-    def provider(self, request, mock_browser, mock_qwen_automation) -> AIProvider:
+    def provider(self, request, mock_browser) -> AIProvider:
         """Create provider instances for contract testing."""
         if request.param == "chatgpt":
             return ChatGPTProvider(mock_browser)
         elif request.param == "qwen":
-            # This will fail until we implement QwenProvider
             from prompt_bridge.infrastructure.providers.qwen import QwenProvider
 
-            return QwenProvider(mock_qwen_automation)
+            return QwenProvider(mock_browser)
         else:
             raise ValueError(f"Unknown provider: {request.param}")
 
