@@ -8,21 +8,27 @@ import structlog
 import uvicorn
 from fastapi import FastAPI, Request
 
+from prompt_bridge.application import ChatCompletionUseCase, ProviderRegistry
 from prompt_bridge.infrastructure.config import load_config
 from prompt_bridge.infrastructure.observability import configure_logging
+from prompt_bridge.infrastructure.providers.chatgpt import ChatGPTProvider
+from prompt_bridge.infrastructure.providers.qwen import QwenProvider
+from prompt_bridge.infrastructure.qwen_automation import QwenAutomation
 from prompt_bridge.infrastructure.session_pool import SessionPool
 from prompt_bridge.presentation.middleware import RequestIDMiddleware
 
-# Global settings and session pool instances
+# Global dependency container
 settings = None
 session_pool = None
+provider_registry = None
+chat_completion_use_case = None
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global settings, session_pool
+    global settings, session_pool, provider_registry, chat_completion_use_case
 
     # Startup
     logger.info("application_startup", message="Initializing application...")
@@ -50,9 +56,34 @@ async def lifespan(app: FastAPI):
     await session_pool.initialize()
     logger.info("session_pool_initialized", stats=session_pool.get_stats())
 
-    # TODO: Initialize remaining dependencies
-    # - Provider registry (Issue #9)
-    # - Use cases
+    # Initialize providers (Issue #9)
+    logger.info("initializing_providers")
+    chatgpt_provider = ChatGPTProvider(session_pool)
+
+    # Initialize provider registry (Issue #9)
+    logger.info("initializing_provider_registry")
+    provider_registry = ProviderRegistry()
+    provider_registry.register(chatgpt_provider, "chatgpt")
+
+    # Initialize Qwen provider if enabled
+    qwen_enabled = getattr(settings, "qwen_enabled", False)
+    if qwen_enabled:
+        logger.info("initializing_qwen_provider")
+        qwen_automation = QwenAutomation(session_pool)
+        qwen_provider = QwenProvider(qwen_automation)
+        provider_registry.register(qwen_provider, "qwen")
+
+    logger.info(
+        "provider_registry_initialized",
+        providers=provider_registry.list_providers(),
+    )
+
+    # Initialize use case (Issue #9)
+    logger.info("initializing_chat_completion_use_case")
+    chat_completion_use_case = ChatCompletionUseCase(
+        provider_registry=provider_registry,
+        authenticator=None,  # TODO: Add authenticator in Issue #10
+    )
 
     logger.info("application_ready", message="Application initialized successfully")
 
@@ -98,10 +129,16 @@ def create_app() -> FastAPI:
         if session_pool:
             response["session_pool"] = session_pool.get_stats()
 
-        # TODO: Add circuit breaker status once provider registry is initialized (Issue #9)
-        # response["circuit_breakers"] = {
-        #     "chatgpt": chatgpt_provider.get_circuit_breaker_status()
-        # }
+        # Add provider registry info if available (Issue #9)
+        if provider_registry:
+            response["providers"] = provider_registry.list_providers()
+            response["provider_health"] = await provider_registry.health_check_all()
+
+        # Add circuit breaker status if use case available (Issue #9)
+        if chat_completion_use_case:
+            response["circuit_breakers"] = (
+                chat_completion_use_case.get_circuit_breaker_status()
+            )
 
         return response
 
